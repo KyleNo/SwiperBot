@@ -10,6 +10,21 @@ from music_queue import Music_Queue, Node
 
 import youtube_dl
 
+import ctypes
+import ctypes.util
+
+print("ctypes - Find opus:")
+a = ctypes.util.find_library('opus')
+print(a)
+ 
+print("Discord - Load Opus:")
+b = discord.opus.load_opus(a)
+print(b)
+ 
+print("Discord - Is loaded:")
+c = discord.opus.is_loaded()
+print(c)
+
 # on start up remove previously downloaded songs
 mp3s = glob.glob("./*.mp3")
 for mp3 in mp3s:
