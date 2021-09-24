@@ -9,7 +9,7 @@ This bot currently only supports minimal functionality:
 
 The play command adds a song to the queue and begins playing.
 
-alias: !p
+alias: !p, !swipe
 
 usage: !play <Youtube video title or url>
   
@@ -25,7 +25,7 @@ usage: !skip
 
 The clear command ends the current song and removes all songs in the queue.
 
-alias: !c
+alias: !c, !swipernoswiping
 
 usage !clear
 

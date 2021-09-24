@@ -37,3 +37,14 @@ class Music_Queue:
 
   def hasNext(self):
     return self.head is not None
+
+  def getQueue(self) -> list:
+    res = []
+    node = self.head
+    while node is not None:
+      res.append(node)
+      node = node.next
+    return res
+
+  #def moveBack(self, source, dest):
+  #

@@ -3,13 +3,17 @@ import os
 import discord
 import validators
 import asyncio
+import glob
 from youtube_search import YoutubeSearch
 from urllib.parse import urlparse, parse_qs
 from music_queue import Music_Queue, Node
 
 import youtube_dl
 
-
+# on start up remove previously downloaded songs
+mp3s = glob.glob("./*.mp3")
+for mp3 in mp3s:
+  os.remove(mp3)
 
 prefix = '!'
 
@@ -85,7 +89,7 @@ async def play_song(message, args):
   
   url = get_yt_video_url(id)
 
-  await message.channel.send("Added " + title + " to queue.")
+  await message.channel.send("Swiped " + title + " into queue.")
 
   if guild.id in mq_dict:
     mq = mq_dict[guild.id]
@@ -163,7 +167,8 @@ async def clear(message):
   elif not (vc.is_playing() or vc.is_paused()):
     return await message.channel.send("There is nothing to clear!")
   else:
-    await message.channel.send("Queue cleared!")
+    #await message.channel.send("Queue cleared!")
+    await message.channel.send("Aw man!")
     del mq_dict[guild.id]
     vc.stop()
 
@@ -178,12 +183,12 @@ async def on_message(message):
   if message.content.startswith('!'):
     #await message.channel.send('Hello!')
     command = message.content.split(' ')
-    c = command[0]
-    if c == "{0}play".format(prefix) or c == "{0}p".format(prefix):
+    c = command[0].lower()
+    if c == "{0}play".format(prefix) or c == "{0}p".format(prefix) or c == "{0}swipe".format(prefix):
       await play_song(message, command[1:])
     elif c == "{0}skip".format(prefix) or c == "{0}s".format(prefix):
       await skip(message)
-    elif c == "{0}clear".format(prefix) or c == "{0}c".format(prefix):
+    elif c == "{0}clear".format(prefix) or c == "{0}c".format(prefix) or c == "{0}noswiping".format(prefix) or c == "{0}swipernoswiping".format(prefix):
       await clear(message)
 
 
