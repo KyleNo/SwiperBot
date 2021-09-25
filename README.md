@@ -11,7 +11,7 @@ A simple music bot written in Python.
 
 4. Install poetry
 
-5. Run:
+5. Use poetry to install dependencies:
 
 ```
 poetry install 
@@ -41,8 +41,21 @@ usage: !skip
 
 The clear command ends the current song and removes all songs in the queue.
 
-alias: !c, !swipernoswiping
+alias: !c, !swipernoswiping, !noswiping
 
-usage !clear
+usage: !clear
+
+
+## !queue
+
+The queue command displays the next 10 songs in the queue.
+
+alias: !q, !swiped, !inventory
+
+usage: !queue
+
+# A note on secrets
 
 The bot token should be stored as an environment variable with the name 'SWIPER_TOKEN'
+
+This also now requires a Youtube API key as an environment variable with name 'YOUTUBE_KEY'
