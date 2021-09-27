@@ -17,35 +17,41 @@ import re
 import ctypes
 import ctypes.util
 
-yt_key = os.environ['YOUTUBE_KEY']
 
-TIMEOUT = 120.0
+if __name__ == '__main__':
 
-print("ctypes - Find opus:")
-a = ctypes.util.find_library('opus')
-print(a)
- 
-print("Discord - Load Opus:")
-b = discord.opus.load_opus(a)
-print(b)
- 
-print("Discord - Is loaded:")
-c = discord.opus.is_loaded()
-print(c)
+    yt_key = os.environ['YOUTUBE_KEY']
 
-# on start up remove previously downloaded songs
-mp3s = glob.glob("./*.mp3")
-for mp3 in mp3s:
-  os.remove(mp3)
+    TIMEOUT = 120.0
 
-prefix = '!'
+    print("ctypes - Find opus:")
+    a = ctypes.util.find_library('opus')
+    print(a)
+     
+    print("Discord - Load Opus:")
+    b = discord.opus.load_opus(a)
+    print(b)
+     
+    print("Discord - Is loaded:")
+    c = discord.opus.is_loaded()
+    print(c)
 
-client = discord.Client()
+    # on start up remove previously downloaded songs
+    mp3s = glob.glob("./*.mp3")
+    for mp3 in mp3s:
+      os.remove(mp3)
+
+    prefix = '!'
+
+    client = discord.Client()
 
 mq_dict = {}
 curr_song = {}
 
 admin_ids = [os.environ['ADMIN_0'], os.environ['ADMIN_1'], os.environ['ADMIN_2']]
+token = os.environ['SWIPER_TOKEN']
+
+
 
 """playlist_id = 'PLntXg07Q4D0DasUGYjRjszTmvocDnVeB3'
 
@@ -219,6 +225,7 @@ async def play_next(mq: Music_Queue, prev_id, message, vc):
     os.remove('{0}.mp3'.format(prev_id))
   if not mq.hasNext():
     del mq_dict[guild.id]
+    del curr_song[guild.id]
     await vc.disconnect()
     return
   ydl_opts = {
@@ -233,6 +240,7 @@ async def play_next(mq: Music_Queue, prev_id, message, vc):
   song = mq.getNext()
   id = get_yt_video_id(song.url)
   await message.channel.send("Now playing: " + song.title)
+  curr_song[guild.id] = song.title
   if not os.path.exists('{0}.mp3'.format(id)):
     with youtube_dl.YoutubeDL(ydl_opts) as ydl:
       ydl.download([song.url])
@@ -316,6 +324,11 @@ async def show_queue(message):
   embed.add_field(name="Queue", value=v, inline=False)
   await message.channel.send(embed=embed)
 
+async def now_playing(message):
+  if message.guild.id not in curr_song:
+    return await message.channel.send("Nothing is being played right now!")
+  return await message.channel.send("Now playing: " + curr_song[message.guild.id].title)
+
 async def hard_reset():
   print("hr...")
   for key in mq_dict:
@@ -329,6 +342,7 @@ async def hard_reset():
 
 @client.event
 async def on_ready():
+  print("test")
   await client.change_presence(status=discord.Status.online, activity=discord.Game("You're too late! You'll never find it now!"))
   print('Logged in as {0.user}'.format(client))
 
@@ -348,9 +362,11 @@ async def on_message(message):
       await clear(message)
     elif c == "{0}queue".format(prefix) or c == "{0}q".format(prefix) or c == "{0}inventory".format(prefix) or c == "{0}swiped".format(prefix):
       await show_queue(message)
+    elif c == "{0}nowplaying".format(prefix) or c == "{0}np".format(prefix) or "{0}youretoolate".format(prefix):
+      await now_playing(message)
     elif c == "{0}hardreset".format(prefix) and str(message.author.id) in admin_ids:
       print("entering reset")
       await hard_reset()
 
-token = os.environ['SWIPER_TOKEN']
-client.run(token)
+if __name__ == '__main__':
+  client.run(token)
