@@ -45,6 +45,8 @@ client = discord.Client()
 mq_dict = {}
 curr_song = {}
 
+admin_ids = [os.environ['ADMIN_0'], os.environ['ADMIN_1'], os.environ['ADMIN_2']]
+
 """playlist_id = 'PLntXg07Q4D0DasUGYjRjszTmvocDnVeB3'
 
 youtube = googleapiclient.discovery.build("youtube", "v3", developerKey=yt_key)
@@ -314,6 +316,17 @@ async def show_queue(message):
   embed.add_field(name="Queue", value=v, inline=False)
   await message.channel.send(embed=embed)
 
+async def hard_reset():
+  print("hr...")
+  for key in mq_dict:
+    guild = client.get_guild(key)
+    vc = guild.voice_client
+    if vc:
+      await vc.disconnect(force=True)
+  print("Hard reset")
+  #os.spawnl(os.P_NOWAIT, "reset.sh", "")
+  os.execl("nohup", "poetry", "run", "python3.8", "main.py", "&")
+
 @client.event
 async def on_ready():
   await client.change_presence(status=discord.Status.online, activity=discord.Game("You're too late! You'll never find it now!"))
@@ -335,7 +348,9 @@ async def on_message(message):
       await clear(message)
     elif c == "{0}queue".format(prefix) or c == "{0}q".format(prefix) or c == "{0}inventory".format(prefix) or c == "{0}swiped".format(prefix):
       await show_queue(message)
-
+    elif c == "{0}hardreset".format(prefix) and str(message.author.id) in admin_ids:
+      print("entering reset")
+      await hard_reset()
 
 token = os.environ['SWIPER_TOKEN']
 client.run(token)
