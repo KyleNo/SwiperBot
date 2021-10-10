@@ -46,5 +46,26 @@ class Music_Queue:
       node = node.next
     return res
 
+  # Remove the ith song from the queue
+  def remove(self, i: int):
+    if i >= self.length:
+      print("Err: Remove index out of range")
+      return None
+    curr = 0
+    node = self.head
+    prev = None
+    while node is not None:
+      if curr == i:
+        if prev:
+          prev.next = node.next
+        else:
+          self.head = node.next
+        self.length -= 1
+        return node
+      prev = node
+      node = node.next
+      curr += 1
+    return None
+
   #def moveBack(self, source, dest):
   #

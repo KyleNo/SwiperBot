@@ -7,7 +7,7 @@ import glob
 from youtube_search import YoutubeSearch
 from urllib.parse import urlparse, parse_qs
 from music_queue import Music_Queue, Node
-
+from timeout import Timer
 import youtube_dl
 
 import googleapiclient.discovery
@@ -22,7 +22,7 @@ if __name__ == '__main__':
 
     yt_key = os.environ['YOUTUBE_KEY']
 
-    TIMEOUT = 120.0
+    TIMEOUT = 60.0
 
     print("ctypes - Find opus:")
     a = ctypes.util.find_library('opus')
@@ -51,7 +51,7 @@ curr_song = {}
 admin_ids = [os.environ['ADMIN_0'], os.environ['ADMIN_1'], os.environ['ADMIN_2']]
 token = os.environ['SWIPER_TOKEN']
 
-
+timer = {}
 
 """playlist_id = 'PLntXg07Q4D0DasUGYjRjszTmvocDnVeB3'
 
@@ -113,6 +113,22 @@ def get_yt_video_id(url: str) -> str:
         return query.path[1:]
     else:
         raise ValueError
+
+async def auto_dc(message, guild):
+  #print("Auto disconnecting")
+  await message.channel.send("Disconnecting due inactivity")
+  vc = guild.voice_client
+  if vc is None:
+    return
+  await vc.disconnect()
+
+def _auto_dc(guild):
+  print("_auto_dc")
+  vc = guild.voice_client
+  if vc is None:
+    return
+  asyncio.run(vc.disconnect())
+  #asyncio.run(auto_dc(guild))
 
 async def play_list(message, pl_id, index):
   guild = message.guild
@@ -201,6 +217,11 @@ async def play_song(message, args):
     id = results[0]['id']
     title = results[0]['title']
   
+  if guild.id in timer:
+    t = timer[guild.id]
+    t.cancel()
+    del timer[guild.id]
+
   url = get_yt_video_url(id)
 
   await message.channel.send("Swiped " + title + " into queue.")
@@ -208,11 +229,16 @@ async def play_song(message, args):
   if guild.id in mq_dict:
     mq = mq_dict[guild.id]
     mq.add(Node(url, title, channel))
+    if not guild.voice_client:
+      vc = await channel.connect(timeout=TIMEOUT, reconnect=True)
+      await play_next(mq, None, message, vc)
   else:
     mq = Music_Queue()
     mq.add(Node(url, title, channel))
     mq_dict[guild.id] = mq
-    vc = await channel.connect(timeout=TIMEOUT, reconnect=True)
+    vc = guild.voice_client
+    if vc is None:
+      vc = await channel.connect(timeout=TIMEOUT, reconnect=True)
     await play_next(mq, None, message, vc)
 
 # ToDo: catch download errors
@@ -226,7 +252,8 @@ async def play_next(mq: Music_Queue, prev_id, message, vc):
   if not mq.hasNext():
     del mq_dict[guild.id]
     del curr_song[guild.id]
-    await vc.disconnect()
+    # set auto disconnect timer
+    timer[guild.id] = Timer(300.0, auto_dc, args=[message, guild])
     return
   ydl_opts = {
     'format': 'bestaudio/best',
@@ -240,7 +267,7 @@ async def play_next(mq: Music_Queue, prev_id, message, vc):
   song = mq.getNext()
   id = get_yt_video_id(song.url)
   await message.channel.send("Now playing: " + song.title)
-  curr_song[guild.id] = song.title
+  curr_song[guild.id] = song
   if not os.path.exists('{0}.mp3'.format(id)):
     with youtube_dl.YoutubeDL(ydl_opts) as ydl:
       ydl.download([song.url])
@@ -251,6 +278,7 @@ async def play_next(mq: Music_Queue, prev_id, message, vc):
       await message.channel.send("Error: " + error)
       await message.channel.send("Aborting...")
       del mq_dict[guild.id]
+      del curr_song[guild.id]
   try:
     vc.play(discord.FFmpegPCMAudio(source='{0}.mp3'.format(id)))
   except Exception as error:
@@ -277,6 +305,7 @@ async def play_next(mq: Music_Queue, prev_id, message, vc):
         await message.channel.send("Error: " + error)
         await message.channel.send("Aborting...")
         del mq_dict[guild.id]
+        del curr_song[guild.id]
         vc.stop()
   while vc.is_playing():
     await asyncio.sleep(1)
@@ -306,7 +335,7 @@ async def clear(message):
   else:
     #await message.channel.send("Queue cleared!")
     await message.channel.send("Oh, man!")
-    del mq_dict[guild.id]
+    mq_dict[guild.id] = Music_Queue()
     vc.stop()
 
 async def show_queue(message):
@@ -329,6 +358,38 @@ async def now_playing(message):
     return await message.channel.send("Nothing is being played right now!")
   return await message.channel.send("Now playing: " + curr_song[message.guild.id].title)
 
+async def remove(message, index_str: str):
+  if message.guild.id not in mq_dict:
+    return await message.channel.send("There are no songs to remove")
+  guild = message.guild
+  try:
+    idx = int(index_str)
+  except ValueError:
+    return await message.channel.send("You must provide the number in the queue to remove")
+  mq = mq_dict[guild.id]
+  if idx > mq.length or idx < 1:
+    return await message.channel.send("Position must be between 1 and " + mq.length)
+  removed_song = mq.remove(idx - 1)
+  return await message.channel.send("Removed " + removed_song.title)
+
+async def disconnect_vc(message):
+  print("dc")
+  guild = message.guild
+  vc = guild.voice_client
+  if vc is None:
+    return await message.channel.send("I am not in a voice channel")
+  if guild.id in mq_dict:
+    del mq_dict[guild.id]
+  if guild.id in curr_song:
+    del curr_song[guild.id]
+  if guild.id in timer:
+    t = timer[guild.id]
+    t.cancel()
+    del timer[guild.id]
+  if vc.is_playing() or vc.is_paused():
+    vc.stop
+  await vc.disconnect()
+
 async def hard_reset():
   print("hr...")
   for key in mq_dict:
@@ -350,7 +411,7 @@ async def on_ready():
 async def on_message(message):
   if message.author == client.user:
     return
-  if message.content.startswith('!'):
+  if message.content.startswith(prefix):
     #await message.channel.send('Hello!')
     command = message.content.split(' ')
     c = command[0].lower()
@@ -362,8 +423,12 @@ async def on_message(message):
       await clear(message)
     elif c == "{0}queue".format(prefix) or c == "{0}q".format(prefix) or c == "{0}inventory".format(prefix) or c == "{0}swiped".format(prefix):
       await show_queue(message)
-    elif c == "{0}nowplaying".format(prefix) or c == "{0}np".format(prefix) or "{0}youretoolate".format(prefix):
+    elif c == "{0}nowplaying".format(prefix) or c == "{0}np".format(prefix) or c == "{0}youretoolate".format(prefix):
       await now_playing(message)
+    elif c == "{0}remove".format(prefix) or c == "{0}r".format(prefix):
+      await remove(message, command[1])
+    elif c == "{0}disconnect".format(prefix) or c == "{0}dc".format(prefix):
+      await disconnect_vc(message)
     elif c == "{0}hardreset".format(prefix) and str(message.author.id) in admin_ids:
       print("entering reset")
       await hard_reset()
