@@ -9,6 +9,7 @@ from urllib.parse import urlparse, parse_qs
 from music_queue import Music_Queue, Node
 from timeout import Timer
 import youtube_dl
+from youtube_dl import YoutubeDL
 
 import googleapiclient.discovery
 
@@ -48,40 +49,40 @@ if __name__ == '__main__':
 mq_dict = {}
 curr_song = {}
 
+# https://stackoverflow.com/questions/66610012/discord-py-streaming-youtube-live-into-voice
+ytdlopts_stream = {
+  'format': 'bestaudio/best',
+  'outtmpl': 'downloads/%(extractor)s-%(id)s-%(title)s.%(ext)s',
+  'restrictfilenames': True,
+  'noplaylist': True,
+  'nocheckcertificate': True,
+  'ignoreerrors': False,
+  'logtostderr': False,
+  'quiet': True,
+  'no_warnings': True,
+  'default_search': 'auto',
+  'source_address': '0.0.0.0'  # ipv6 addresses cause issues sometimes
+}
+ytdl = YoutubeDL(ytdlopts_stream)
+ffmpeg_options = {
+    'options': '-vn',
+    "before_options": "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5"
+}
+
 admin_ids = [os.environ['ADMIN_0'], os.environ['ADMIN_1'], os.environ['ADMIN_2']]
 token = os.environ['SWIPER_TOKEN']
 
 timer = {}
 
-"""playlist_id = 'PLntXg07Q4D0DasUGYjRjszTmvocDnVeB3'
 
-youtube = googleapiclient.discovery.build("youtube", "v3", developerKey=yt_key)
 
-request = youtube.playlistItems().list(
-    part = "snippet",
-    playlistId = playlist_id,
-    maxResults = 50
-)
-response = request.execute()
-
-playlist_items = []
-while request is not None:
-    response = request.execute()
-    playlist_items += response["items"]
-    request = youtube.playlistItems().list_next(request, response)
-
-print(f"total: {len(playlist_items)}")
-print(playlist_items[0])
-for video in playlist_items:
-  print(video['snippet']['title'])
-  print(video['snippet']['resourceId']['videoId'])"""
-
-# initial version: http://stackoverflow.com/a/7936523/617185 \
-#    by Mikhail Kashkin(http://stackoverflow.com/users/85739/mikhail-kashkin)
 
 def get_yt_video_url(id: str) -> str:
   return 'https://www.youtube.com/watch?v={0}'.format(id)
 
+
+# initial version: http://stackoverflow.com/a/7936523/617185 \
+#    by Mikhail Kashkin(http://stackoverflow.com/users/85739/mikhail-kashkin)
 def get_yt_video_id(url: str) -> str:
     """Returns Video_ID extracting from the given url of Youtube
     
@@ -241,11 +242,10 @@ async def play_song(message, args):
       vc = await channel.connect(timeout=TIMEOUT, reconnect=True)
     await play_next(mq, None, message, vc)
 
-# ToDo: catch download errors
-# eg
-#youtube_dl.utils.DownloadError: ERROR: unable to download video data: HTTP Error 403: Forbidden
 
-async def play_next(mq: Music_Queue, prev_id, message, vc):
+
+# Old play_next function which relies on downloading
+"""async def play_next(mq: Music_Queue, prev_id, message, vc):
   guild = message.guild
   if prev_id is not None:
     os.remove('{0}.mp3'.format(prev_id))
@@ -275,7 +275,7 @@ async def play_next(mq: Music_Queue, prev_id, message, vc):
     try:
       await vc.connect(reconnect=True, timeout=TIMEOUT)
     except asyncio.TimeoutError:
-      await message.channel.send("Error: " + error)
+      await message.channel.send("Error: ")
       await message.channel.send("Aborting...")
       del mq_dict[guild.id]
       del curr_song[guild.id]
@@ -307,6 +307,42 @@ async def play_next(mq: Music_Queue, prev_id, message, vc):
         del mq_dict[guild.id]
         del curr_song[guild.id]
         vc.stop()
+  while vc.is_playing():
+    await asyncio.sleep(1)
+  if guild.id not in mq_dict:
+    return await vc.disconnect()
+  await play_next(mq, id, message, vc)"""
+
+async def play_next(mq: Music_Queue, prev_id, message, vc):
+  guild = message.guild
+  if not mq.hasNext():
+    del mq_dict[guild.id]
+    del curr_song[guild.id]
+    # set auto disconnect timer
+    timer[guild.id] = Timer(300.0, auto_dc, args=[message, guild])
+    return
+  song = mq.getNext()
+  id = get_yt_video_id(song.url)
+  await message.channel.send("Now playing: " + song.title)
+  curr_song[guild.id] = song
+  data = ytdl.extract_info(url=song.url, download=False)
+  #source = ytdl.prepare_filename(data)
+
+  if not vc.is_connected():
+    try:
+      await vc.connect(reconnect=True, timeout=TIMEOUT)
+    except asyncio.TimeoutError:
+      await message.channel.send("Error")
+      await message.channel.send("Aborting...")
+      del mq_dict[guild.id]
+      del curr_song[guild.id]
+  try:
+    vc.play(discord.FFmpegPCMAudio(data['url'], **ffmpeg_options))
+  except Exception as error:
+    await message.channel.send("Error: " + error)
+    await message.channel.send("Aborting...")
+    del mq_dict[guild.id]
+    vc.stop()
   while vc.is_playing():
     await asyncio.sleep(1)
   if guild.id not in mq_dict:
