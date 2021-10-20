@@ -123,6 +123,25 @@ async def auto_dc(message, guild):
     return
   await vc.disconnect()
 
+async def pause_dc(message, guild):
+  vc = guild.voice_client
+  if vc and vc.is_playing():
+    return
+  if guild.id in mq_dict:
+    del mq_dict[guild.id]
+  if guild.id in curr_song:
+    del curr_song[guild.id]
+  #if guild.id in timer:
+  #  t = timer[guild.id]
+  #  t.cancel()
+  #  del timer[guild.id]
+  if vc:
+    if vc.is_playing() or vc.is_paused():
+      vc.stop()
+    await vc.disconnect()
+
+
+
 def _auto_dc(guild):
   print("_auto_dc")
   vc = guild.voice_client
@@ -184,6 +203,10 @@ async def play_song(message, args):
   if message.author.voice is None:
     await message.channel.send("Must be in a voice call to use !play.")
     return
+  elif guild.voice_client and \
+        message.author.voice.channel != guild.voice_client.channel and \
+        (guild.voice_client.is_playing() or guild.voice_client.is_paused()):
+    return await message.channel.send("I am currently playing in a different voice channel!")
   channel = message.author.voice.channel
   perm = channel.permissions_for(guild.me)
   if not (perm.connect and perm.speak):
@@ -323,9 +346,14 @@ async def play_next(mq: Music_Queue, prev_id, message, vc):
     return
   song = mq.getNext()
   id = get_yt_video_id(song.url)
-  await message.channel.send("Now playing: " + song.title)
+  await message.channel.send("Now playing: " + song.title, delete_after=60.0)
   curr_song[guild.id] = song
-  data = ytdl.extract_info(url=song.url, download=False)
+  try:
+    data = ytdl.extract_info(url=song.url, download=False)
+  except:
+    await message.channel.send("Error playing {0}!".format(song.title))
+    return await play_next(mq, id, message, vc)
+
   #source = ytdl.prepare_filename(data)
 
   if not vc.is_connected():
@@ -338,16 +366,49 @@ async def play_next(mq: Music_Queue, prev_id, message, vc):
       del curr_song[guild.id]
   try:
     vc.play(discord.FFmpegPCMAudio(data['url'], **ffmpeg_options))
-  except Exception as error:
-    await message.channel.send("Error: " + error)
-    await message.channel.send("Aborting...")
-    del mq_dict[guild.id]
-    vc.stop()
-  while vc.is_playing():
-    await asyncio.sleep(1)
+    #vc.play(discord.FFmpegPCMAudio(song.url, **ffmpeg_options))
+    while vc.is_playing():
+      await asyncio.sleep(1)
+  except:
+    await message.channel.send("Error playing {0}".format(song.title))
   if guild.id not in mq_dict:
     return await vc.disconnect()
   await play_next(mq, id, message, vc)
+
+async def pause(message):
+  guild = message.guild
+  vc = guild.voice_client
+  if vc is None:
+    return await message.channel.send("I'm not currently in a voice channel!")
+  elif not message.author.voice or message.author.voice.channel != vc.channel:
+    return await message.channel.send("We are not in the same voice channel!")
+  elif not vc.is_playing():
+    return await message.channel.send("There is nothing to playing!")
+  else:
+    vc.pause()
+    await message.channel.send(("Playback is paused. Use {0}resume to continue."
+    "I will automatically leave in 10 minutes.").format(prefix), delete_after=600.0)
+    if guild.id in timer:
+      t = timer[guild.id]
+      t.cancel()
+    timer[guild.id] = Timer(30.0, pause_dc, args=[message, guild])
+
+async def resume(message):
+  guild = message.guild
+  vc = guild.voice_client
+  if vc is None:
+    return await message.channel.send("I'm not currently in a voice channel!")
+  elif not message.author.voice or message.author.voice.channel != vc.channel:
+    return await message.channel.send("We are not in the same voice channel!")
+  elif not vc.is_paused():
+    return await message.channel.send("There is nothing to resume!")
+  else:
+    vc.resume()
+    if guild.id in timer:
+      t = timer[guild.id]
+      t.cancel()
+      del timer[guild.id]
+      print("timer canceled")
 
 
 async def skip(message):
@@ -357,6 +418,8 @@ async def skip(message):
     return await message.channel.send("I'm not currently in a voice channel!")
   elif not (vc.is_playing() or vc.is_paused()):
     return await message.channel.send("There is nothing to skip!")
+  elif not message.author.voice or message.author.voice.channel != vc.channel:
+    return await message.channel.send("We are not in the same voice channel!")
   else:
     await message.channel.send("Skipped!")
     vc.stop()
@@ -368,10 +431,14 @@ async def clear(message):
     return await message.channel.send("I'm not currently in a voice channel!")
   elif not (vc.is_playing() or vc.is_paused()):
     return await message.channel.send("There is nothing to clear!")
+  elif not message.author.voice or message.author.voice.channel != vc.channel:
+    return await message.channel.send("We are not in the same voice channel!")
   else:
     #await message.channel.send("Queue cleared!")
     await message.channel.send("Oh, man!")
-    mq_dict[guild.id] = Music_Queue()
+    #mq_dict[guild.id] = Music_Queue()
+    #del mq_dict[guild.id]
+    mq_dict[guild.id].clear()
     vc.stop()
 
 async def show_queue(message):
@@ -423,8 +490,45 @@ async def disconnect_vc(message):
     t.cancel()
     del timer[guild.id]
   if vc.is_playing() or vc.is_paused():
-    vc.stop
+    vc.stop()
   await vc.disconnect()
+
+# Shuffles songs in the music queue.
+# no arguments: shuffle entire queue
+# one argument: shuffle from given index to end
+# two arguments: shuffle from smaller to larger index
+async def shuffle(message, args):
+  guild = message.guild
+  vc = guild.voice_client
+  if guild.id not in mq_dict or mq_dict[guild.id].length==0:
+    return await message.channel.send("There is nothing to shuffle!")
+  mq = mq_dict[guild.id]
+  if len(args) == 0:
+    await message.channel.send("Shuffling!")
+    return mq.shuffle()
+  elif len(args) == 1:
+    try:
+      start = int(args[0])
+    except ValueError:
+      return await message.channel.send("Indices must be integers!")
+    if start < 1 or start > mq.length:
+      return await message.channel.send("Index out of range!")
+    else:
+      await message.channel.send("Shuffling!")
+      return mq.shuffle(start=start-1)
+  else:
+    try:
+      start = int(args[0])
+      end = int(args[1])
+    except ValueError:
+      return await message.channel.send("Indices must be integers!")
+    if start > end:
+      start, end = end, start
+    if start < 1 or start > mq.length or end < 1 or end > mq.length:
+      return await message.channel.send("Index out of range!")
+    else:
+      await message.channel.send("Shuffling!")
+      return mq.shuffle(start=start-1, end=end-1)
 
 async def hard_reset():
   print("hr...")
@@ -453,6 +557,10 @@ async def on_message(message):
     c = command[0].lower()
     if c == "{0}play".format(prefix) or c == "{0}p".format(prefix) or c == "{0}swipe".format(prefix):
       await play_song(message, command[1:])
+    elif c == "{0}pause".format(prefix):
+      await pause(message)
+    elif c == "{0}resume".format(prefix):
+      await resume(message)
     elif c == "{0}skip".format(prefix) or c == "{0}s".format(prefix):
       await skip(message)
     elif c == "{0}clear".format(prefix) or c == "{0}c".format(prefix) or c == "{0}noswiping".format(prefix) or c == "{0}swipernoswiping".format(prefix):
@@ -465,9 +573,11 @@ async def on_message(message):
       await remove(message, command[1])
     elif c == "{0}disconnect".format(prefix) or c == "{0}dc".format(prefix):
       await disconnect_vc(message)
-    elif c == "{0}hardreset".format(prefix) and str(message.author.id) in admin_ids:
-      print("entering reset")
-      await hard_reset()
+    elif c == "{0}shuffle".format(prefix) or c=="{0}sh".format(prefix):
+      await shuffle(message, command[1:])
+    #elif c == "{0}hardreset".format(prefix) and str(message.author.id) in admin_ids:
+    #  print("entering reset")
+    #  await hard_reset()
 
 if __name__ == '__main__':
   client.run(token)
