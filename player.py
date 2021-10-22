@@ -312,6 +312,9 @@ class Player:
     return await message.channel.send("Now playing: " + self.curr_song.title)
 
   async def remove(self, message, index_str: str):
+    if len(index_str) == 0:
+      return await message.channel.send("You must provide the number in the queue to remove")
+    index_str = index_str[0]
     if not self.mq:
       return await message.channel.send("There are no songs to remove")
     try:

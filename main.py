@@ -4,6 +4,9 @@ import discord
 
 from player import Player
 
+from functools import partial
+from typing import List
+
 import ctypes
 import ctypes.util
 
@@ -27,10 +30,35 @@ players = {}
 prefix = '!'
 token = os.environ['SWIPER_TOKEN']
 
+def command_dispatch(s: str, p: Player, m: discord.Message, args: List[str]):
+  return {
+    "play":             partial(p.play_song, m, args),
+    "p":                partial(p.play_song, m, args),
+    "swipe":            partial(p.play_song, m, args),
+    "pause":            partial(p.pause, m),
+    "resume":           partial(p.resume, m),
+    "skip":             partial(p.skip, m),
+    "s":                partial(p.skip, m),
+    "clear":            partial(p.clear, m),
+    "c":                partial(p.clear, m),
+    "noswiping":        partial(p.clear, m),
+    "swipernoswiping":  partial(p.clear, m),
+    "queue":            partial(p.show_queue, m),
+    "q":                partial(p.show_queue, m),
+    "swiped":           partial(p.show_queue, m),
+    "nowplaying":       partial(p.now_playing, m),
+    "np":               partial(p.now_playing, m),
+    "remove":           partial(p.remove, m, args),
+    "r":                partial(p.remove, m, args),
+    "disconnect":       partial(p.disconnect_vc, m),
+    "dc":               partial(p.disconnect_vc, m),
+    "shuffle":          partial(p.shuffle, m, args),
+    "sh":               partial(p.shuffle, m, args) 
+  }.get(s)
+
 
 @client.event
 async def on_ready():
-  print("test")
   await client.change_presence(status=discord.Status.online, activity=discord.Game("You're too late! You'll never find it now!"))
   print('Logged in as {0.user}'.format(client))
 
@@ -47,29 +75,11 @@ async def on_message(message):
       players[gid] = p
     command = message.content.split(' ')
     c = command[0].lower()
-    if c == "{0}play".format(prefix) or c == "{0}p".format(prefix) or c == "{0}swipe".format(prefix):
-      await p.play_song(message, command[1:])
-    elif c == "{0}pause".format(prefix):
-      await p.pause(message)
-    elif c == "{0}resume".format(prefix):
-      await p.resume(message)
-    elif c == "{0}skip".format(prefix) or c == "{0}s".format(prefix):
-      await p.skip(message)
-    elif c == "{0}clear".format(prefix) or c == "{0}c".format(prefix) or c == "{0}noswiping".format(prefix) or c == "{0}swipernoswiping".format(prefix):
-      await p.clear(message)
-    elif c == "{0}queue".format(prefix) or c == "{0}q".format(prefix) or c == "{0}inventory".format(prefix) or c == "{0}swiped".format(prefix):
-      await p.show_queue(message)
-    elif c == "{0}nowplaying".format(prefix) or c == "{0}np".format(prefix) or c == "{0}youretoolate".format(prefix):
-      await p.now_playing(message)
-    elif c == "{0}remove".format(prefix) or c == "{0}r".format(prefix):
-      await p.remove(message, command[1])
-    elif c == "{0}disconnect".format(prefix) or c == "{0}dc".format(prefix):
-      await p.disconnect_vc(message)
-    elif c == "{0}shuffle".format(prefix) or c=="{0}sh".format(prefix):
-      await p.shuffle(message, command[1:])
-    #elif c == "{0}hardreset".format(prefix) and str(message.author.id) in admin_ids:
-    #  print("entering reset")
-    #  await hard_reset()
+    com_name = c[len(prefix):]
+    args = command[1:]
+    command_fn = command_dispatch(com_name, p, message, args)
+    return await command_fn()
+
 
 if __name__ == '__main__':
   client.run(token)
