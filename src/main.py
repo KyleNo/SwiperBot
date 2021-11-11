@@ -4,6 +4,9 @@ import discord
 
 from player import Player
 
+from tts import tts, tts_chinese, tts_general, show_voices, voice_info
+from image import upscale, describe_image
+
 from functools import partial
 from typing import List
 
@@ -57,7 +60,26 @@ def command_dispatch(s: str, p: Player, m: discord.Message, args: List[str]):
     "disconnect":       partial(p.disconnect_vc, m),
     "dc":               partial(p.disconnect_vc, m),
     "shuffle":          partial(p.shuffle, m, args),
-    "sh":               partial(p.shuffle, m, args) 
+    "sh":               partial(p.shuffle, m, args),
+    "tts":              partial(tts, p, m, args),
+    "say":              partial(tts, p, m, args),
+    "saych":            partial(tts_chinese, p, m, args),
+    "ttsch":            partial(tts_chinese, p, m, args),
+    "saychinese":       partial(tts_chinese, p, m, args),
+    "ttschinese":       partial(tts_chinese, p, m, args),
+    "sayvoice":         partial(tts_general, p, m, args),
+    "sayv":             partial(tts_general, p, m, args),
+    "sv":               partial(tts_general, p, m, args),
+    "sayvo":            partial(tts_general, p, m, args),
+    "voices":           partial(show_voices, m),
+    "v":                partial(show_voices, m),
+    "voiceinfo":        partial(voice_info, m, args),
+    "vi":               partial(voice_info, m, args),
+    "upscale":          partial(upscale, m, args, 'photo'),
+    "u":                partial(upscale, m, args, 'photo'),
+    "upscaleart":       partial(upscale, m, args, 'art'),
+    "ua":               partial(upscale, m, args, 'art'),
+    "describe":         partial(describe_image, m, args)
   }.get(s, default_fn)
 
 

@@ -119,7 +119,7 @@ class Player:
         title = video['snippet']['title']
         self.mq.add(Node(url, title, channel))
       vc = await channel.connect(timeout=TIMEOUT, reconnect=True)
-      await self.play_next(mq, None, message, vc)
+      await self.play_next(None, message, vc)
     #for video in playlist_items:
     #  #print(video['snippet']['title'])
 
