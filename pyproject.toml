@@ -15,6 +15,7 @@ google-api-python-client = "^2.22.0"
 boto3 = "^1.19.12"
 google-cloud-vision = "^2.6.2"
 opencv-python-headless = "^4.5.4"
+imageio = "^2.10.3"
 
 [tool.poetry.dev-dependencies]
 

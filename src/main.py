@@ -5,7 +5,7 @@ import discord
 from player import Player
 
 from tts import tts, tts_chinese, tts_general, show_voices, voice_info
-from image import upscale, describe_image
+from image import upscale, describe_image, find_objects
 
 from functools import partial
 from typing import List
@@ -79,7 +79,8 @@ def command_dispatch(s: str, p: Player, m: discord.Message, args: List[str]):
     "u":                partial(upscale, m, args, 'photo'),
     "upscaleart":       partial(upscale, m, args, 'art'),
     "ua":               partial(upscale, m, args, 'art'),
-    "describe":         partial(describe_image, m, args)
+    "describe":         partial(describe_image, m, args),
+    "identify":         partial(find_objects, m, args)
   }.get(s, default_fn)
 
 
