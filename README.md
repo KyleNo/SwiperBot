@@ -1,5 +1,5 @@
 # SwiperBot
-A simple music bot written in Python.
+A simple Discord music bot written in Python.
 
 # Installation
 
@@ -14,7 +14,7 @@ A simple music bot written in Python.
 5. Use poetry to install dependencies:
 ```poetry install```
 
-6. Set SWIPER_TOKEN and YOUTUBE_KEY environment variables
+6. Set environment variables (details below).
 
 # Running
 
@@ -22,9 +22,9 @@ To run in foreground, run swipe.sh. To run in background run back_swipe.sh.
 To kill the previous background instance run no_swiping.sh.
 To restart a background task, run reset.sh.
 
-# Commands
+# Music Commands
 
-This bot currently only supports minimal functionality:
+Below are the commands for the music features.
 
 ## !play
 
@@ -107,8 +107,16 @@ alias: !sh
 
 usage: !shuffle [starting index [ending index]]
 
-# A note on secrets
+# A note on secrets and environment variables
+
+There are several APIs that this bot can utilize. If you do not want to use certain features you can remove the imports to the Python files that call them and remove the functions from the command dictionary.
 
 The bot token should be stored as an environment variable with the name 'SWIPER_TOKEN'
 
-This also now requires a Youtube API key as an environment variable with name 'YOUTUBE_KEY'
+The scripts rely on having an environment variable 'SWIPER_HOME' that is the path to the main directory of this repository.
+
+This also now requires a Youtube API key as an environment variable with name 'YOUTUBE_KEY'. I will rework this later so the youtube api key is not required.
+
+The Google Vision features require credentials. I chose to store the credentials in ```~/.gcp/xxx.json```, and then set the environment variable 'GOOGLE_APPLICATION_CREDENTIALS' to that path. You can create this credential file [here](https://console.cloud.google.com/apis/credentials).
+
+The AWS Polly text to speech feature requires a config file and a credentials file. It will search for these as ```~/.aws/config``` and ```~/.aws/credentials```. For more information see [here](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-files.html).
